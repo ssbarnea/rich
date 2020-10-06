@@ -1,3 +1,5 @@
+from rich.containers import Renderables
+
 from datetime import datetime
 from typing import Iterable, List, Optional, TYPE_CHECKING, Union
 
@@ -71,3 +73,55 @@ class LogRender:
 
         output.add_row(*row)
         return output
+
+
+class FluidLogRender(LogRender):
+    """Renders log by not using tables or wrapping long lines."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(
+        self,
+        console: "Console",
+        renderables: Iterable["ConsoleRenderable"],
+        log_time: datetime = None,
+        time_format: str = None,
+        level: TextType = "",
+        path: str = None,
+        line_no: int = None,
+        link_path: str = None,
+    ) -> Renderables:
+
+        columns: List[Union[str, Text]] = []
+        if self.show_time:
+            if log_time is None:
+                log_time = datetime.now()
+            log_time_display = log_time.strftime(time_format or self.time_format)
+            if log_time_display == self._last_time:
+                columns.append(Text(" " * len(log_time_display)))
+            else:
+                columns.append(Text(log_time_display, style="log.time"))
+                self._last_time = log_time_display
+        if self.show_level:
+            level += (8 - len(str(level))) * " "
+            # mypy complaints about inconsistent retun
+            if isinstance(level, str):
+                level = Text(level)
+            columns.append(level)
+
+        if self.show_path and path:
+            path_text = Text(" ", style="log.path")
+            path_text.append(
+                path, style=f"link file://{link_path}" if link_path else ""
+            )
+            if line_no:
+                path_text.append(f":{line_no}")
+            renderables[-1].append(path_text)
+
+        prefix = Text()
+        for column in columns:
+            prefix += (column + Text(" "))
+        result = list(renderables)
+        result[0] = prefix + result[0]
+        return Renderables(result)
